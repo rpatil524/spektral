@@ -64,7 +64,7 @@ class Loader:
             predictions = model(inputs, training=True)
             loss = loss_fn(target, predictions) + sum(model.losses)
         gradients = tape.gradient(loss, model.trainable_variables)
-        opt.apply_gradients(zip(gradients, model.trainable_variables))
+        optimizer.apply_gradients(zip(gradients, model.trainable_variables))
     ```
 
     We can then train our model in a for loop as follows:
@@ -374,6 +374,10 @@ class BatchLoader(Loader):
     **Arguments**
 
     - `dataset`: a graph Dataset;
+    - `mask`: if True, node attributes will be extended with a binary mask that
+    indicates valid nodes (the last feature of each node will be 1 if the node is valid
+    and 0 otherwise). Use this flag in conjunction with layers.base.GraphMasking to
+    start the propagation of masks in a model.
     - `batch_size`: size of the mini-batches;
     - `epochs`: number of epochs to iterate over the dataset. By default (`None`)
     iterates indefinitely;
@@ -387,16 +391,20 @@ class BatchLoader(Loader):
 
     - `x`: node attributes of shape `[batch, n_max, n_node_features]`;
     - `a`: adjacency matrices of shape `[batch, n_max, n_max]`;
-    - `e`: edge attributes of shape `[batch, n_edges, n_edge_features]`.
+    - `e`: edge attributes of shape `[batch, n_max, n_max, n_edge_features]`.
 
     `labels` have shape `[batch, n_labels]`.
     """
+
+    def __init__(self, dataset, mask=False, batch_size=1, epochs=None, shuffle=True):
+        self.mask = mask
+        super().__init__(dataset, batch_size=batch_size, epochs=epochs, shuffle=shuffle)
 
     def collate(self, batch):
         packed = self.pack(batch, return_dict=True)
         y = np.array(packed.pop("y_list")) if "y" in self.dataset.signature else None
 
-        output = to_batch(**packed)
+        output = to_batch(**packed, mask=self.mask)
 
         # Sparse matrices to SparseTensors
         output = list(output)
@@ -423,6 +431,10 @@ class BatchLoader(Loader):
         signature = self.dataset.signature
         for k in signature:
             signature[k]["shape"] = prepend_none(signature[k]["shape"])
+        if "x" in signature:
+            signature["x"]["shape"] = signature["x"]["shape"][:-1] + (
+                signature["x"]["shape"][-1] + 1,
+            )
         if "a" in signature:
             # Adjacency matrix in batch mode is dense
             signature["a"]["spec"] = tf.TensorSpec
@@ -466,19 +478,21 @@ class PackedBatchLoader(BatchLoader):
 
     - `x`: node attributes of shape `[batch, n_max, n_node_features]`;
     - `a`: adjacency matrices of shape `[batch, n_max, n_max]`;
-    - `e`: edge attributes of shape `[batch, n_max, n_edge_features]`.
+    - `e`: edge attributes of shape `[batch, n_max, n_max, n_edge_features]`.
 
     `labels` have shape `[batch, ..., n_labels]`.
     """
 
-    def __init__(self, dataset, batch_size=1, epochs=None, shuffle=True):
-        super().__init__(dataset, batch_size=batch_size, epochs=epochs, shuffle=shuffle)
+    def __init__(self, dataset, mask=False, batch_size=1, epochs=None, shuffle=True):
+        super().__init__(
+            dataset, mask=mask, batch_size=batch_size, epochs=epochs, shuffle=shuffle
+        )
 
         # Drop the Dataset container and work on packed tensors directly
         packed = self.pack(self.dataset, return_dict=True)
         y = np.array(packed.pop("y_list")) if "y" in dataset.signature else None
         self.signature = dataset.signature
-        self.dataset = to_batch(**packed)
+        self.dataset = to_batch(**packed, mask=mask)
         if y is not None:
             self.dataset += (y,)
 
@@ -504,6 +518,10 @@ class PackedBatchLoader(BatchLoader):
         signature = self.signature
         for k in signature:
             signature[k]["shape"] = prepend_none(signature[k]["shape"])
+        if "x" in signature:
+            signature["x"]["shape"] = signature["x"]["shape"][:-1] + (
+                signature["x"]["shape"][-1] + 1,
+            )
         if "a" in signature:
             # Adjacency matrix in batch mode is dense
             signature["a"]["spec"] = tf.TensorSpec

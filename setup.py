@@ -5,13 +5,13 @@ with open("README.md", "r") as fh:
 
 setup(
     name="spektral",
-    version="1.0.6",
+    version="1.0.7",
     packages=find_packages(),
     install_requires=[
         "joblib",
         "lxml",
         "networkx",
-        "numpy",
+        "numpy<1.20",
         "pandas",
         "requests",
         "scikit-learn",

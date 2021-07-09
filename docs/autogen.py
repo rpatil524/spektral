@@ -9,13 +9,6 @@ import sys
 
 from spektral import data, datasets, layers, models, transforms, utils
 
-try:
-    reload(sys)
-    sys.setdefaultencoding("utf8")
-except NameError:
-    pass
-
-
 EXCLUDE = {}
 
 # For each class to document, it is possible to:
@@ -48,6 +41,7 @@ PAGES = [
             layers.GINConv,
             layers.GraphSageConv,
             layers.TAGConv,
+            layers.XENetConv,
         ],
     },
     {
@@ -88,7 +82,7 @@ PAGES = [
         "page": "models.md",
         "functions": [],
         "methods": [],
-        "classes": [models.GCN, models.GeneralGNN],
+        "classes": [models.GCN, models.GeneralGNN, models.GNNExplainer],
     },
     # Data #####################################################################
     {"page": "data.md", "functions": [], "methods": [], "classes": [data.Graph]},
@@ -559,23 +553,31 @@ if __name__ == "__main__":
             os.makedirs(subdir)
         with open(path, "w") as f:
             f.write(mkdown)
+
         if not os.path.exists("sources/stylesheets/"):
             os.makedirs("sources/stylesheets/")
+        shutil.copy("./stylesheets/extra.css", "./sources/stylesheets/extra.css")
 
         if not os.path.exists("sources/js/"):
             os.makedirs("sources/js/")
+        shutil.copy("./js/macros.js", "./sources/js/macros.js")
 
         if not os.path.exists("sources/img/"):
             os.makedirs("sources/img/")
+        for file in glob.glob(r"./img/*.svg"):
+            shutil.copy(file, "./sources/img/")
 
         if not os.path.exists("sources/custom_theme/img/"):
             os.makedirs("sources/custom_theme/img/")
-
-        shutil.copy("./stylesheets/extra.css", "./sources/stylesheets/extra.css")
-        shutil.copy("./js/macros.js", "./sources/js/macros.js")
-        for file in glob.glob(r"./img/*.svg"):
-            shutil.copy(file, "./sources/img/")
         shutil.copy("./img/favicon.ico", "./sources/custom_theme/img/favicon.ico")
+
+        if not os.path.exists("sources/.well-known/"):
+            os.makedirs("sources/.well-known/")
+        shutil.copy(
+            "./templates/brave-rewards-verification.txt",
+            "./sources/.well-known/brave-rewards-verification.txt",
+        )
+
         shutil.copy(
             "./templates/google8a76765aa72fa8c1.html",
             "./sources/google8a76765aa72fa8c1.html",
